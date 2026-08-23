@@ -1,0 +1,74 @@
+### robot_localization config for a Yahboom ROSMASTER
+### Inputs come from yahboom_odom_bridge.py, NOT from base_node.
+###
+###   /wheel/twist   <- /vel_raw      (encoder-derived body twist)
+###   /imu/data_cov  <- /imu/data_raw (gyro; covariances patched in)
+###
+### This node is the single owner of the odom -> base_link transform.
+### Nothing else may publish that edge: keep base_node's pub_odom_tf false,
+### or better, don't run base_node at all.
+
+ekf_filter_node:
+  ros__parameters:
+    frequency: 30.0
+    sensor_timeout: 0.2
+    two_d_mode: true                # planar robot: zeroes z, roll, pitch
+    publish_tf: true                # THIS node owns odom -> base_link
+    publish_acceleration: false
+    transform_time_offset: 0.0
+    print_diagnostics: true         # shows up in `ros2 topic echo /diagnostics`
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link      # the Yahboom URDF root is base_link;
+                                    # base_footprint is commented out in it
+    world_frame: odom               # fusing continuous data only
+
+    # State vector order (15):
+    # x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az
+
+    # ---- wheel encoders, as a body twist -------------------------------
+    # Set the vy entry (index 7) to false on a differential-drive or
+    # Ackermann base. Leave it true only on a mecanum base (X3).
+    twist0: /wheel/twist
+    twist0_config: [false, false, false,
+                    false, false, false,
+                    true,  true,  false,
+                    false, false, true,
+                    false, false, false]
+    twist0_queue_size: 10
+    twist0_rejection_threshold: 3.0   # reject spikes beyond 3 sigma
+
+    # ---- IMU: yaw rate only --------------------------------------------
+    # The driver publishes no orientation, so do not enable index 5 (yaw).
+    # Accelerometer entries stay off: on a small indoor robot they add far
+    # more noise than signal once the wheels already observe vx.
+    imu0: /imu/data_cov
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 20
+    imu0_remove_gravitational_acceleration: true
+
+    # ---- process noise --------------------------------------------------
+    # Defaults are usually fine. Raise the vx / vyaw terms if the filter
+    # feels sluggish to respond; lower them if the output is jittery.
+    process_noise_covariance: [0.02, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.02, 0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.02, 0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025, 0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.025, 0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.04,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.02, 0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.015]
